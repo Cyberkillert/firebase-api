@@ -11,7 +11,7 @@ admin.initializeApp({
 
 const db = admin.database();
 
-app.get("order", async (req, res) => {
+app.get("/order", async (req, res) => {
     try {
         const ref = db.ref("/");
         const snapshot = await ref.once("value");
