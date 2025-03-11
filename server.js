@@ -6,12 +6,12 @@ const PORT = process.env.PORT || 3000;
 
 admin.initializeApp({
     credential: admin.credential.applicationDefault(),
-    databaseURL: "https://android-e312a-default-rtdb.firebaseio.com", // Replace with your database URL
+    databaseURL: "https://store-bazaar-39fbf-default-rtdb.firebaseio.com", // Replace with your database URL
 });
 
 const db = admin.database();
 
-app.get("/apkname", async (req, res) => {
+app.get("/-O3N2FXZkHyN_KAUgTbR", async (req, res) => {
     try {
         const ref = db.ref("/");
         const snapshot = await ref.once("value");
