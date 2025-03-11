@@ -27,7 +27,7 @@ if (!admin.apps.length) {
 const db = admin.database();
 
 // ✅ Fetch all orders
-app.get("/orders", async (req, res) => {
+app.get("/order", async (req, res) => {
     try {
         const ref = db.ref("order"); // ✅ Only fetch "order" data
         const snapshot = await ref.once("value");
