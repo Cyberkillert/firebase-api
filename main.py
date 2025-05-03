@@ -9,7 +9,7 @@ from firebase_admin import credentials, db
 app = Flask(__name__)
 
 # Firebase Admin SDK setup
-cred = credentials.Certificate("serviceAccountKey.json")  # <-- Replace with your actual path
+cred = credentials.Certificate("GOOGLE_APPLICATION_CREDENTIALS_JSON")  # <-- Replace with your actual path
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'sk-diondstore-default-rtdb.firebaseio.com'  # <-- Replace with your actual database URL
 })
