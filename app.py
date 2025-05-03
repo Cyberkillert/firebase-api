@@ -5,15 +5,25 @@ import time
 import random
 import firebase_admin
 from firebase_admin import credentials, db
+import base64
+import tempfile
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Firebase Admin SDK setup
-cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-cred = credentials.Certificate(cred_path)  # <-- Replace with your actual path
+# Firebase Admin SDK setup from base64-encoded env var
+encoded = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
+decoded_json = base64.b64decode(encoded).decode("utf-8")
+
+# Write decoded credentials to a temporary file
+with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json") as f:
+    f.write(decoded_json)
+    temp_path = f.name
+
+# Initialize Firebase
+cred = credentials.Certificate(temp_path)
 firebase_admin.initialize_app(cred, {
-    'databaseURL': 'sk-diondstore-default-rtdb.firebaseio.com'  # <-- Replace with your actual database URL
+    'databaseURL': 'https://sk-diondstore-default-rtdb.firebaseio.com'  # Ensure correct URL
 })
 
 # Global variables
@@ -55,7 +65,7 @@ def run_counter():
         time.sleep(3)
         phase = "idle"
 
-# Start the counter thread immediately
+# Start the counter thread
 threading.Thread(target=run_counter, daemon=True).start()
 
 @app.route('/start')
