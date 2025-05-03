@@ -23,14 +23,17 @@ with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json") as f:
 # Initialize Firebase
 cred = credentials.Certificate(temp_path)
 firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://sk-diondstore-default-rtdb.firebaseio.com'
+    'databaseURL': 'https://sk-diondstore-default-rtdb.firebaseio.com'  # Ensure correct URL
 })
 
 # Global variables
 count = 0.0
 max_rising_value = 0.0
 phase = "idle"
+
+# Flag to ensure background thread runs only once
 thread_started = False
+thread_lock = threading.Lock()
 
 def run_counter():
     global count, phase, max_rising_value
@@ -56,22 +59,27 @@ def run_counter():
         # Mark end of rising phase
         max_rising_value = round(count, 2)
 
-        # Push value to Firebase
-        db.reference("his/Value").set(max_rising_value)
+        # Push value to Firebase under "his/Value"
+        ref = db.reference("his/Value")
+        ref.set(max_rising_value)
 
         phase = "done"
+
+        # Optional delay before restarting
         time.sleep(3)
         phase = "idle"
 
-@app.before_first_request
-def start_thread():
-    global thread_started
-    if not thread_started:
-        thread_started = True
-        threading.Thread(target=run_counter, daemon=True).start()
-
 @app.route('/start')
 def get_status():
+    global thread_started
+
+    # Ensure that the background thread starts only once
+    with thread_lock:
+        if not thread_started:
+            thread_started = True
+            threading.Thread(target=run_counter, daemon=True).start()
+
+    # Return the current status based on the phase
     if phase == "done":
         return jsonify({"done": max_rising_value})
     else:
