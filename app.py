@@ -73,7 +73,7 @@ def run_cycle_forever():
                 for key in keys:
                     history_ref.child(key).delete()
 
-        # Wait before restarting the next round
+        # Wait before next round
         time.sleep(3)
         with lock:
             phase = "idle"
@@ -89,6 +89,12 @@ def get_status():
             response["done"] = max_rising_value
         return jsonify(response)
 
-if __name__ == '__main__':
+# Start background thread right after server starts
+def run_background():
     threading.Thread(target=run_cycle_forever, daemon=True).start()
+
+# Using delayed timer to run after server starts
+threading.Timer(1.0, run_background).start()
+
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
