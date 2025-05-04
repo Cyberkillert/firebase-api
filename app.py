@@ -3,6 +3,7 @@ import threading
 import os
 import time
 import random
+from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, db
 import base64
@@ -10,6 +11,7 @@ import tempfile
 
 # Initialize Flask app
 app = Flask(__name__)
+CORS(app)
 
 # Firebase Admin SDK setup from base64-encoded env var
 encoded = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
