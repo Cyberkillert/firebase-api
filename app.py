@@ -4,7 +4,6 @@ from firebase_admin import credentials, db
 from datetime import datetime
 import os, base64, tempfile
 
-# Flask app setup
 app = Flask(__name__)
 
 # Firebase setup
@@ -24,30 +23,24 @@ count = 0.0
 max_rising_value = 0.0
 phase = "idle"
 lock = threading.Lock()
-running = False
 
-def run_cycle():
-    global count, max_rising_value, phase, running
+def run_cycle_forever():
+    global count, max_rising_value, phase
 
     while True:
+        # Countdown Phase
         with lock:
-            if running:
-                continue
-            running = True
             count = 15
             phase = "countdown"
-
-        # Countdown from 15 to 0
         while count > 0:
             time.sleep(1)
             with lock:
                 count -= 1
 
+        # Rising Phase
         with lock:
             count = 0.0
             phase = "rising"
-
-        # Rising phase
         while True:
             time.sleep(0.2)
             with lock:
@@ -56,26 +49,46 @@ def run_cycle():
                 if count >= 50 or random.random() < 0.03:
                     break
 
+        # Done Phase
         with lock:
             max_rising_value = count
             phase = "done"
-            db.reference("his/Value").set(max_rising_value)
 
+            timestamp = datetime.utcnow().strftime("%y%m%d%H%M%S")
+            ref = db.reference("his")
+            ref.child("Value").set({
+                "Ended. Max": max_rising_value,
+                "time": timestamp
+            })
+            history_ref = ref.child("history")
+            history_ref.push({
+                "value": max_rising_value,
+                "time": timestamp
+            })
+
+            # Keep only last 50 entries
+            history = history_ref.get()
+            if history and len(history) > 50:
+                keys = list(history.keys())[:-50]
+                for key in keys:
+                    history_ref.child(key).delete()
+
+        # Wait before restarting the next round
         time.sleep(3)
         with lock:
             phase = "idle"
-            running = False
 
 @app.route('/start')
-def start_or_status():
+def get_status():
     with lock:
-        if not running and phase in ["idle", "done"]:
-            threading.Thread(target=run_cycle, daemon=True).start()
-        return jsonify({
+        response = {
             "phase": phase,
-            "count": round(count, 2),
-            "done": max_rising_value if phase == "done" else None
-        })
+            "count": round(count, 2)
+        }
+        if phase == "done":
+            response["done"] = max_rising_value
+        return jsonify(response)
 
 if __name__ == '__main__':
+    threading.Thread(target=run_cycle_forever, daemon=True).start()
     app.run(host='0.0.0.0', port=8080)
