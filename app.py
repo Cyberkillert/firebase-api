@@ -38,55 +38,61 @@ def run_counter():
     global count, phase, max_rising_value
 
     while True:
-        # Phase 1: Countdown from 15 to 0
-        count = 15
-        phase = "countdown"
-        while count > 0:
-            time.sleep(1)
-            count -= 1
+        try:
+            # Phase 1: Countdown from 15 to 0
+            count = 15
+            phase = "countdown"
+            while count > 0:
+                time.sleep(1)
+                count -= 1
 
-        # Phase 2: Random rise from 0.0 to ~50.0
-        count = 0.0
-        phase = "rising"
-        while count < 50.0:
-            time.sleep(0.2)
-            count += random.uniform(0.1, 1.0)
-            count = round(count, 2)
-            if count >= 50 or random.random() < 0.03:
-                break
+            # Phase 2: Rising
+            count = 0.0
+            phase = "rising"
+            start_time = time.time()
 
-        # End of rising phase
-        max_rising_value = round(count, 2)
+            while True:
+                time.sleep(0.2)
+                count += random.uniform(0.5, 2.0)
+                count = round(count, 2)
 
-        # Get timestamp
-        now = datetime.datetime.utcnow()
-        compact_time = now.strftime("%y%m%d%H%M%S")
+                # Break if timeout exceeded or count passes 50
+                if time.time() - start_time > 20 or count >= 50.0 or random.random() < 0.05:
+                    break
 
-        # Push to Firebase under "his/{timestamp}"
-        db.reference(f"his/{compact_time}").set({
-            "Ended. Max": max_rising_value,
-            "time": compact_time
-        })
+            max_rising_value = round(count, 2)
 
-        # Trim to keep only latest 50
-        his_ref = db.reference("his")
-        entries = his_ref.get()
-        if entries and len(entries) > 50:
-            sorted_keys = sorted(entries.keys())
-            keys_to_delete = sorted_keys[:len(entries) - 50]
-            for key in keys_to_delete:
-                his_ref.child(key).delete()
+            # Format time as YYMMDDHHMMSS
+            now = datetime.datetime.utcnow()
+            compact_time = now.strftime("%y%m%d%H%M%S")
 
-        # Finalize
-        phase = "done"
-        time.sleep(3)
-        phase = "idle"
+            # Store to Firebase
+            db.reference(f"his/{compact_time}").set({
+                "Ended. Max": max_rising_value,
+                "time": compact_time
+            })
+
+            # Keep only last 50
+            his_ref = db.reference("his")
+            entries = his_ref.get()
+            if entries and len(entries) > 50:
+                sorted_keys = sorted(entries.keys())
+                for key in sorted_keys[:len(entries) - 50]:
+                    his_ref.child(key).delete()
+
+            phase = "done"
+            time.sleep(3)
+            phase = "idle"
+        except Exception as e:
+            print("Error in run_counter:", e)
+            phase = "error"
+            time.sleep(5)
 
 @app.route('/start')
 def get_status():
     global thread_started
 
-    # Start thread only once
+    # Ensure background thread starts only once
     with thread_lock:
         if not thread_started:
             thread_started = True
