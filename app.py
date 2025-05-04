@@ -1,17 +1,23 @@
 from flask import Flask, jsonify
-import threading
-import time
-import random
-import firebase_admin
+from flask_socketio import SocketIO, emit
+import threading, time, random, firebase_admin
 from firebase_admin import credentials, db
+from datetime import datetime
+import os, base64, tempfile
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Firebase Admin SDK setup
-cred = credentials.Certificate("GOOGLE_APPLICATION_CREDENTIALS_JSON")  # <-- Replace with your actual path
+# Firebase setup from env var
+encoded = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
+decoded_json = base64.b64decode(encoded).decode("utf-8")
+with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json") as f:
+    f.write(decoded_json)
+    temp_path = f.name
+
+cred = credentials.Certificate(temp_path)
 firebase_admin.initialize_app(cred, {
-    'databaseURL': 'sk-diondstore-default-rtdb.firebaseio.com'  # <-- Replace with your actual database URL
+    'databaseURL': 'https://sk-diondstore-default-rtdb.firebaseio.com'
 })
 
 # Global variables
