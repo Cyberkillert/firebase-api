@@ -1,5 +1,4 @@
 from flask import Flask, jsonify
-from flask_socketio import SocketIO, emit
 import threading, time, random, firebase_admin
 from firebase_admin import credentials, db
 from datetime import datetime
