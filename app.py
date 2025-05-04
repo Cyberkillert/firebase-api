@@ -1,100 +1,89 @@
 from flask import Flask, jsonify
-import threading, time, random, firebase_admin
+import threading
+import os
+import time
+import random
+import firebase_admin
 from firebase_admin import credentials, db
-from datetime import datetime
-import os, base64, tempfile
+import base64
+import tempfile
 
+# Initialize Flask app
 app = Flask(__name__)
 
-# Firebase setup
+# Firebase Admin SDK setup from base64-encoded env var
 encoded = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
 decoded_json = base64.b64decode(encoded).decode("utf-8")
+
+# Write decoded credentials to a temporary file
 with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json") as f:
     f.write(decoded_json)
     temp_path = f.name
 
+# Initialize Firebase
 cred = credentials.Certificate(temp_path)
 firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://sk-diondstore-default-rtdb.firebaseio.com'
+    'databaseURL': 'https://sk-diondstore-default-rtdb.firebaseio.com'  # Ensure correct URL
 })
 
-# Shared state
+# Global variables
 count = 0.0
 max_rising_value = 0.0
 phase = "idle"
-lock = threading.Lock()
 
-def run_cycle_forever():
-    global count, max_rising_value, phase
+# Flag to ensure background thread runs only once
+thread_started = False
+thread_lock = threading.Lock()
+
+def run_counter():
+    global count, phase, max_rising_value
 
     while True:
-        # Countdown Phase
-        with lock:
-            count = 15
-            phase = "countdown"
+        # Phase 1: Countdown from 15 to 0
+        count = 15
+        phase = "countdown"
         while count > 0:
             time.sleep(1)
-            with lock:
-                count -= 1
+            count -= 1
 
-        # Rising Phase
-        with lock:
-            count = 0.0
-            phase = "rising"
-        while True:
+        # Phase 2: Random rise from 0.0 to ~50.0
+        count = 0.0
+        phase = "rising"
+        while count < 50.0:
             time.sleep(0.2)
-            with lock:
-                count += random.uniform(0.1, 1.0)
-                count = round(count, 2)
-                if count >= 50 or random.random() < 0.03:
-                    break
+            count += random.uniform(0.1, 1.0)
+            count = round(count, 2)
+            if count >= 50 or random.random() < 0.03:
+                break
 
-        # Done Phase
-        with lock:
-            max_rising_value = count
-            phase = "done"
+        # Mark end of rising phase
+        max_rising_value = round(count, 2)
 
-            timestamp = datetime.utcnow().strftime("%y%m%d%H%M%S")
-            ref = db.reference("his")
-            ref.child("Value").set({
-                "Ended. Max": max_rising_value,
-                "time": timestamp
-            })
-            history_ref = ref.child("history")
-            history_ref.push({
-                "value": max_rising_value,
-                "time": timestamp
-            })
+        # Push value to Firebase under "his/Value"
+        ref = db.reference("his/Value")
+        ref.set(max_rising_value)
 
-            # Keep only last 50 entries
-            history = history_ref.get()
-            if history and len(history) > 50:
-                keys = list(history.keys())[:-50]
-                for key in keys:
-                    history_ref.child(key).delete()
+        phase = "done"
 
-        # Wait before next round
+        # Optional delay before restarting
         time.sleep(3)
-        with lock:
-            phase = "idle"
+        phase = "idle"
 
 @app.route('/start')
 def get_status():
-    with lock:
-        response = {
-            "phase": phase,
-            "count": round(count, 2)
-        }
-        if phase == "done":
-            response["done"] = max_rising_value
-        return jsonify(response)
+    global thread_started
 
-# Start background thread right after server starts
-def run_background():
-    threading.Thread(target=run_cycle_forever, daemon=True).start()
+    # Ensure that the background thread starts only once
+    with thread_lock:
+        if not thread_started:
+            thread_started = True
+            threading.Thread(target=run_counter, daemon=True).start()
 
-# Using delayed timer to run after server starts
-threading.Timer(1.0, run_background).start()
+    # Return the current status based on the phase
+    if phase == "done":
+        return jsonify({"done": max_rising_value})
+    else:
+        return jsonify({phase: round(count, 2)})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
